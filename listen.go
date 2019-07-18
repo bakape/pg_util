@@ -23,7 +23,7 @@ type ListenOpts struct {
 	OnMsg func(msg string) error
 
 	// Optional connection loss handler
-	OnConnectionLoss func()
+	OnConnectionLoss func() error
 
 	// Optional error handler
 	OnError func(err error)
@@ -44,14 +44,18 @@ func Listen(opts ListenOpts) (err error) {
 		pending := make(map[string]struct{})
 		runPending := make(chan string)
 
+		handleError := func(format string, args ...interface{}) {
+			if opts.OnError != nil {
+				opts.OnError(fmt.Errorf(format, args...))
+			}
+		}
+
 		handle := func(msg string) {
 			err := opts.OnMsg(msg)
-			if err != nil && opts.OnError != nil {
-				opts.OnError(
-					fmt.Errorf(
-						"pg_util: listening on channel=`%s` msg=`%s` error=`%s`\n",
-						opts.Channel, msg, err,
-					),
+			if err != nil {
+				handleError(
+					"pg_util: listening on channel=`%s` msg=`%s` error=`%s",
+					opts.Channel, msg, err,
 				)
 			}
 		}
@@ -60,21 +64,24 @@ func Listen(opts ListenOpts) (err error) {
 			select {
 			case <-opts.Canceller:
 				err := l.UnlistenAll()
-				if err != nil && opts.OnError != nil {
-					if opts.OnError != nil {
-						opts.OnError(
-							fmt.Errorf(
-								"pg_util: unlistening channel=`%s` error=`%s`\n",
-								opts.Channel, err,
-							),
-						)
-					}
+				if err != nil {
+					handleError(
+						"pg_util: unlistening channel=`%s` error=`%s`",
+						opts.Channel, err,
+					)
 					return
 				}
 			case msg := <-l.Notify:
 				if msg == nil {
 					if opts.OnConnectionLoss != nil {
-						opts.OnConnectionLoss()
+						err := opts.OnConnectionLoss()
+						if err != nil {
+							handleError(
+								"pg_util: handling connection loss: "+
+									"channel=`%s` error=`%s`",
+								opts.Channel, err,
+							)
+						}
 					}
 				} else {
 					if opts.DebounceInterval == 0 {
