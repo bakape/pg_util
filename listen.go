@@ -1,10 +1,11 @@
 package pg_util
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/lib/pq"
+	"github.com/jackc/pgx"
 )
 
 // Options for calling Listen()
@@ -22,9 +23,6 @@ type ListenOpts struct {
 	// Message handler. Required.
 	OnMsg func(msg string) error
 
-	// Optional connection loss handler
-	OnConnectionLoss func() error
-
 	// Optional error handler
 	OnError func(err error)
 
@@ -34,11 +32,34 @@ type ListenOpts struct {
 
 // Listen assigns a function to listen to Postgres notifications on a channel
 func Listen(opts ListenOpts) (err error) {
-	l := pq.NewListener(opts.ConnectionURL, time.Second, time.Second*10, nil)
-	err = l.Listen(opts.Channel)
+	connOpts, err := pgx.ParseURI(opts.ConnectionURL)
 	if err != nil {
 		return
 	}
+	conn, err := pgx.Connect(connOpts)
+	if err != nil {
+		return
+	}
+	err = conn.Listen(opts.Channel)
+	if err != nil {
+		return
+	}
+
+	type message struct {
+		string
+		error
+	}
+
+	receive := make(chan message)
+	go func() {
+		for {
+			n, err := conn.WaitForNotification(context.Background())
+			if err != nil {
+				return
+			}
+			receive <- message{n.Payload, err}
+		}
+	}()
 
 	go func() {
 		pending := make(map[string]struct{})
@@ -46,6 +67,7 @@ func Listen(opts ListenOpts) (err error) {
 
 		handleError := func(format string, args ...interface{}) {
 			if opts.OnError != nil {
+				format = "pg_util: " + format
 				opts.OnError(fmt.Errorf(format, args...))
 			}
 		}
@@ -54,7 +76,7 @@ func Listen(opts ListenOpts) (err error) {
 			err := opts.OnMsg(msg)
 			if err != nil {
 				handleError(
-					"pg_util: listening on channel=`%s` msg=`%s` error=`%s",
+					"listening on channel=`%s` msg=`%s` error=`%s",
 					opts.Channel, msg, err,
 				)
 			}
@@ -63,35 +85,29 @@ func Listen(opts ListenOpts) (err error) {
 		for {
 			select {
 			case <-opts.Canceller:
-				err := l.UnlistenAll()
+				err := conn.Unlisten(opts.Channel)
 				if err != nil {
 					handleError(
-						"pg_util: unlistening channel=`%s` error=`%s`",
+						"unlistening channel=`%s` error=`%s`",
 						opts.Channel, err,
 					)
 					return
 				}
-			case msg := <-l.Notify:
-				if msg == nil {
-					if opts.OnConnectionLoss != nil {
-						err := opts.OnConnectionLoss()
-						if err != nil {
-							handleError(
-								"pg_util: handling connection loss: "+
-									"channel=`%s` error=`%s`",
-								opts.Channel, err,
-							)
-						}
-					}
+			case msg := <-receive:
+				if msg.error != nil {
+					handleError(
+						"receiving message channel=%s error=%s",
+						opts.Channel, err,
+					)
 				} else {
 					if opts.DebounceInterval == 0 {
-						handle(msg.Extra)
+						handle(msg.string)
 					} else {
-						_, ok := pending[msg.Extra]
+						_, ok := pending[msg.string]
 						if !ok {
-							pending[msg.Extra] = struct{}{}
+							pending[msg.string] = struct{}{}
 							time.AfterFunc(opts.DebounceInterval, func() {
-								runPending <- msg.Extra
+								runPending <- msg.string
 							})
 						}
 					}
