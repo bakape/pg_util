@@ -1,11 +1,13 @@
 package pg_util
 
-import "database/sql"
+import (
+	"github.com/jackc/pgx"
+)
 
 // InTransaction runs a function inside a transaction and handles commiting
 // and rollback on error.
-func InTransaction(db *sql.DB, fn func(*sql.Tx) error) (err error) {
-	tx, err := db.Begin()
+func InTransaction(conn *pgx.ConnPool, fn func(*pgx.Tx) error) (err error) {
+	tx, err := conn.Begin()
 	if err != nil {
 		return
 	}
@@ -19,7 +21,7 @@ func InTransaction(db *sql.DB, fn func(*sql.Tx) error) (err error) {
 }
 
 // Execute all SQL statement strings and return on first error, if any
-func ExecAll(tx *sql.Tx, q ...string) error {
+func ExecAll(tx *pgx.Tx, q ...string) error {
 	for _, q := range q {
 		if _, err := tx.Exec(q); err != nil {
 			return err
