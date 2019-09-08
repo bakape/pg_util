@@ -26,95 +26,160 @@ type ListenOpts struct {
 	// Optional error handler
 	OnError func(err error)
 
-	// Optional channel for cancelling listening
-	Canceller <-chan struct{}
+	// Optional handler for database connection loss. The connection will be
+	// automatically reestablished regardless, but this can be used to hook
+	// extra logic on the library user's side of the application.
+	OnConnectionLoss func()
+
+	// Optional context for cancelling listening
+	Context context.Context
 }
 
 // Listen assigns a function to listen to Postgres notifications on a channel
 func Listen(opts ListenOpts) (err error) {
+	if opts.Context == nil {
+		opts.Context = context.Background()
+	}
+
 	connOpts, err := pgx.ParseURI(opts.ConnectionURL)
 	if err != nil {
 		return
 	}
+
+	handleError := func(format string, args ...interface{}) {
+		if opts.OnError != nil {
+			format = "pg_util: " + format
+			opts.OnError(fmt.Errorf(format, args...))
+		}
+	}
+
+	handle := func(msg string) {
+		err := opts.OnMsg(msg)
+		if err != nil {
+			handleError(
+				"listening on channel=%s msg=%s error=%s",
+				opts.Channel, msg, err,
+			)
+		}
+	}
+
+	reconnect := make(chan struct{})
+
+	// Reusable function for handling connection loss
+	listen := func(conn *pgx.Conn, ctx context.Context) (err error) {
+		err = conn.Listen(opts.Channel)
+		if err != nil {
+			return
+		}
+
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+
+		receive := make(chan string)
+		go func() {
+			for {
+				n, err := conn.WaitForNotification(ctx)
+				if err != nil {
+					cancel()
+					if opts.OnConnectionLoss != nil {
+						opts.OnConnectionLoss()
+					}
+					handleError(
+						"wating for message channel=%s error=%s",
+						opts.Channel, err,
+					)
+					reconnect <- struct{}{}
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case receive <- n.Payload:
+				}
+			}
+		}()
+
+		go func() {
+			pending := make(map[string]struct{})
+			runPending := make(chan string)
+
+			for {
+				select {
+				case <-ctx.Done():
+					err := conn.Unlisten(opts.Channel)
+					if err != nil {
+						handleError(
+							"unlistening channel=%s error=%s",
+							opts.Channel, err,
+						)
+					}
+					return
+				case msg := <-receive:
+					if opts.DebounceInterval == 0 {
+						handle(msg)
+					} else {
+						_, ok := pending[msg]
+						if !ok {
+							pending[msg] = struct{}{}
+							time.AfterFunc(opts.DebounceInterval, func() {
+								runPending <- msg
+							})
+						}
+					}
+				case msg := <-runPending:
+					delete(pending, msg)
+					handle(msg)
+				}
+			}
+		}()
+
+		return
+	}
+
 	conn, err := pgx.Connect(connOpts)
 	if err != nil {
 		return
 	}
-	err = conn.Listen(opts.Channel)
+	err = listen(conn, opts.Context)
 	if err != nil {
 		return
 	}
 
-	type message struct {
-		string
-		error
-	}
-
-	receive := make(chan message)
 	go func() {
-		for {
-			n, err := conn.WaitForNotification(context.Background())
-			if err != nil {
-				return
-			}
-			receive <- message{n.Payload, err}
-		}
-	}()
-
-	go func() {
-		pending := make(map[string]struct{})
-		runPending := make(chan string)
-
-		handleError := func(format string, args ...interface{}) {
-			if opts.OnError != nil {
-				format = "pg_util: " + format
-				opts.OnError(fmt.Errorf(format, args...))
-			}
-		}
-
-		handle := func(msg string) {
-			err := opts.OnMsg(msg)
-			if err != nil {
-				handleError(
-					"listening on channel=`%s` msg=`%s` error=`%s",
-					opts.Channel, msg, err,
-				)
-			}
-		}
-
 		for {
 			select {
-			case <-opts.Canceller:
-				err := conn.Unlisten(opts.Channel)
-				if err != nil {
-					handleError(
-						"unlistening channel=`%s` error=`%s`",
-						opts.Channel, err,
-					)
-					return
-				}
-			case msg := <-receive:
-				if msg.error != nil {
-					handleError(
-						"receiving message channel=%s error=%s",
-						opts.Channel, err,
-					)
-				} else {
-					if opts.DebounceInterval == 0 {
-						handle(msg.string)
-					} else {
-						_, ok := pending[msg.string]
-						if !ok {
-							pending[msg.string] = struct{}{}
-							time.AfterFunc(opts.DebounceInterval, func() {
-								runPending <- msg.string
-							})
+			case <-opts.Context.Done():
+				return
+			case <-reconnect:
+			reconnect:
+				for {
+					conn, err := pgx.Connect(connOpts)
+					switch err {
+					case nil:
+						err = listen(conn, opts.Context)
+						if err == nil {
+							break reconnect
+						} else {
+							handleError(
+								"reconnecting channel=%s error=%s",
+								opts.Channel, err,
+							)
 						}
+					default:
+						handleError(
+							"reconnecting channel=%s error=%s",
+							opts.Channel, err,
+						)
+					}
+
+					// Try to reconnect again after one second, if parent
+					// context still open
+					select {
+					case <-opts.Context.Done():
+						return
+					case <-time.After(time.Second):
 					}
 				}
-			case msg := <-runPending:
-				delete(pending, msg)
-				handle(msg)
 			}
 		}
 	}()
