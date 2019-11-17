@@ -31,6 +31,9 @@ type ListenOpts struct {
 	// extra logic on the library user's side of the application.
 	OnConnectionLoss func()
 
+	// Optional handler for reconnection after database connection loss
+	OnReconnect func()
+
 	// Optional context for cancelling listening
 	Context context.Context
 }
@@ -158,6 +161,9 @@ func Listen(opts ListenOpts) (err error) {
 					case nil:
 						err = listen(conn, opts.Context)
 						if err == nil {
+							if opts.OnReconnect != nil {
+								opts.OnReconnect()
+							}
 							break reconnect
 						} else {
 							handleError(

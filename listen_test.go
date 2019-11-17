@@ -34,10 +34,10 @@ func TestReconnect(t *testing.T) {
 	}
 
 	var (
-		wg                        sync.WaitGroup
-		ctx, cancel               = context.WithCancel(context.Background())
-		msgI                      = 0
-		errorFired, connLossFired bool
+		wg                                        sync.WaitGroup
+		ctx, cancel                               = context.WithCancel(context.Background())
+		msgI                                      = 0
+		errorFired, connLossFired, reconnectFired bool
 	)
 	wg.Add(2)
 	defer cancel()
@@ -50,6 +50,9 @@ func TestReconnect(t *testing.T) {
 		},
 		OnConnectionLoss: func() {
 			connLossFired = true
+		},
+		OnReconnect: func() {
+			reconnectFired = true
 		},
 		OnMsg: func(s string) error {
 			defer wg.Done()
@@ -105,6 +108,9 @@ func TestReconnect(t *testing.T) {
 	}
 	if !connLossFired {
 		t.Fatal("connection loss handler did not fire")
+	}
+	if !reconnectFired {
+		t.Fatal("reconnection handler did not fire")
 	}
 
 	wg.Wait()
