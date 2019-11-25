@@ -14,7 +14,7 @@ type ListenOpts struct {
 	// DebounceInterval. If 0, all messages trigger the handler.
 	DebounceInterval time.Duration
 
-	// URL to connect on to the database. Required.
+	// URL to connect to the database on. Required.
 	ConnectionURL string
 
 	// Channel to listen on. Required.
@@ -75,11 +75,11 @@ func Listen(opts ListenOpts) (err error) {
 			return
 		}
 
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithCancel(ctx)
-
+		ctx, cancel := context.WithCancel(ctx)
 		receive := make(chan string)
 		go func() {
+			defer cancel() // Don't leak child context
+
 			for {
 				n, err := conn.WaitForNotification(ctx)
 				if err != nil {
