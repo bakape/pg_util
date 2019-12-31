@@ -1,3 +1,3 @@
 {
-	"db_url": "postgres://user:password@host:5432/db_name"
+	"db_url": "postgres://postgres:postgres@localhost/pg_util_test"
 }
