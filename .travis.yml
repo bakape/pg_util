@@ -4,6 +4,6 @@ script: go test -v --race ./...
 services:
   - postgresql
 before_script:
-  - psql -c 'alter user postgres with password postgres;' -U postgres
+  - psql -c 'alter user postgres with password \'postgres\'';' -U postgres
   - psql -c 'create database pg_util_test;' -U postgres
   - cp test_config.sample.json test_config.json
