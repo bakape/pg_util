@@ -3,9 +3,8 @@ package pg_util
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	"time"
-
-	"github.com/jackc/pgx"
 )
 
 // Options for calling Listen()
@@ -44,7 +43,7 @@ func Listen(opts ListenOpts) (err error) {
 		opts.Context = context.Background()
 	}
 
-	connOpts, err := pgx.ParseURI(opts.ConnectionURL)
+	connOpts, err := pgx.ParseConfig(opts.ConnectionURL)
 	if err != nil {
 		return
 	}
@@ -70,7 +69,7 @@ func Listen(opts ListenOpts) (err error) {
 
 	// Reusable function for handling connection loss
 	listen := func(conn *pgx.Conn, ctx context.Context) (err error) {
-		err = conn.Listen(opts.Channel)
+		_, err = conn.Exec(opts.Context, "listen "+opts.Channel)
 		if err != nil {
 			return
 		}
@@ -78,7 +77,8 @@ func Listen(opts ListenOpts) (err error) {
 		ctx, cancel := context.WithCancel(ctx)
 		receive := make(chan string)
 		go func() {
-			defer cancel() // Don't leak child context
+			defer cancel()                         // Don't leak child context
+			defer conn.Close(context.Background()) // Or connection
 
 			for {
 				n, err := conn.WaitForNotification(ctx)
@@ -109,13 +109,6 @@ func Listen(opts ListenOpts) (err error) {
 			for {
 				select {
 				case <-ctx.Done():
-					err := conn.Unlisten(opts.Channel)
-					if err != nil {
-						handleError(
-							"unlistening channel=%s error=%s",
-							opts.Channel, err,
-						)
-					}
 					return
 				case msg := <-receive:
 					if opts.DebounceInterval == 0 {
@@ -139,7 +132,7 @@ func Listen(opts ListenOpts) (err error) {
 		return
 	}
 
-	conn, err := pgx.Connect(connOpts)
+	conn, err := pgx.ConnectConfig(opts.Context, connOpts)
 	if err != nil {
 		return
 	}
@@ -156,7 +149,7 @@ func Listen(opts ListenOpts) (err error) {
 			case <-reconnect:
 			reconnect:
 				for {
-					conn, err := pgx.Connect(connOpts)
+					conn, err := pgx.ConnectConfig(opts.Context, connOpts)
 					switch err {
 					case nil:
 						err = listen(conn, opts.Context)

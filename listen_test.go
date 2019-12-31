@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx"
+	"github.com/jackc/pgx/v4"
 )
 
 type testConfig struct {
@@ -28,7 +29,7 @@ func TestReconnect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	connOpts, err := pgx.ParseURI(conf.DBURL)
+	connOpts, err := pgx.ParseConfig(conf.DBURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestReconnect(t *testing.T) {
 		wg                                        sync.WaitGroup
 		ctx, cancel                               = context.WithCancel(context.Background())
 		msgI                                      = 0
-		errorFired, connLossFired, reconnectFired bool
+		errorFired, connLossFired, reconnectFired uint64
 	)
 	wg.Add(2)
 	defer cancel()
@@ -46,13 +47,13 @@ func TestReconnect(t *testing.T) {
 		Channel:       "test",
 		Context:       ctx,
 		OnError: func(_ error) {
-			errorFired = true
+			atomic.StoreUint64(&errorFired, 1)
 		},
 		OnConnectionLoss: func() {
-			connLossFired = true
+			atomic.StoreUint64(&connLossFired, 1)
 		},
 		OnReconnect: func() {
-			reconnectFired = true
+			atomic.StoreUint64(&reconnectFired, 1)
 		},
 		OnMsg: func(s string) error {
 			defer wg.Done()
@@ -70,19 +71,20 @@ func TestReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conn, err := pgx.Connect(connOpts)
+	conn, err := pgx.ConnectConfig(context.Background(), connOpts)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Send first message
-	_, err = conn.Exec(`notify test, 'message_0'`)
+	_, err = conn.Exec(context.Background(), `notify test, 'message_0'`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Simulate disconnect
 	_, err = conn.Exec(
+		context.Background(),
 		fmt.Sprintf(
 			`SELECT pg_terminate_backend(pg_stat_activity.pid)
 			FROM pg_stat_activity
@@ -97,19 +99,19 @@ func TestReconnect(t *testing.T) {
 
 	// Send second message after the client reconnected
 	time.Sleep(time.Second * 2)
-	_, err = conn.Exec(`notify test, 'message_1'`)
+	_, err = conn.Exec(context.Background(), `notify test, 'message_1'`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Assert functions fired
-	if !errorFired {
+	if atomic.LoadUint64(&errorFired) == 0 {
 		t.Fatal("error handler did not fire")
 	}
-	if !connLossFired {
+	if atomic.LoadUint64(&connLossFired) == 0 {
 		t.Fatal("connection loss handler did not fire")
 	}
-	if !reconnectFired {
+	if atomic.LoadUint64(&reconnectFired) == 0 {
 		t.Fatal("reconnection handler did not fire")
 	}
 
