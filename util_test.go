@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v4"
@@ -35,20 +34,18 @@ func getURL(t *testing.T) string {
 func TestInTransaction(t *testing.T) {
 	t.Parallel()
 
-	var (
-		u  = getURL(t)
-		wg sync.WaitGroup
-	)
-
+	u := getURL(t)
 	conn, err := pgx.Connect(context.Background(), u)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer conn.Close(context.Background())
 
 	pool, err := pgxpool.Connect(context.Background(), u)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer pool.Close()
 
 	cases := [...]struct {
 		name    string
@@ -62,11 +59,7 @@ func TestInTransaction(t *testing.T) {
 
 	for i := range cases {
 		c := cases[i]
-		wg.Add(1)
 		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
-			defer wg.Done()
-
 			err := InTransaction(c.ctx, c.starter, func(tx pgx.Tx) (err error) {
 				_, err = tx.Exec(context.Background(), "select 1")
 				return
@@ -76,11 +69,4 @@ func TestInTransaction(t *testing.T) {
 			}
 		})
 	}
-
-	go func() {
-		wg.Wait()
-
-		conn.Close(context.Background())
-		pool.Close()
-	}()
 }
