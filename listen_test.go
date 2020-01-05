@@ -27,9 +27,12 @@ func TestReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Test channel is quoted (dots are illegal unquoted)
+	const channel = "test.test"
+
 	err = Listen(ListenOpts{
 		ConnectionURL: dbURL,
-		Channel:       "test",
+		Channel:       channel,
 		Context:       ctx,
 		OnError: func(_ error) {
 			atomic.StoreUint64(&errorFired, 1)
@@ -61,11 +64,22 @@ func TestReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Send first message
-	_, err = conn.Exec(context.Background(), `notify test, 'message_0'`)
-	if err != nil {
-		t.Fatal(err)
+	notify := func(t *testing.T, msg string) {
+		t.Helper()
+
+		_, err = conn.Exec(
+			context.Background(),
+			`select pg_notify($1, $2)`,
+			channel,
+			msg,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
+
+	// Send first message
+	notify(t, "message_0")
 
 	// Simulate disconnect
 	_, err = conn.Exec(
@@ -84,10 +98,7 @@ func TestReconnect(t *testing.T) {
 
 	// Send second message after the client reconnected
 	time.Sleep(time.Second * 2)
-	_, err = conn.Exec(context.Background(), `notify test, 'message_1'`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	notify(t, "message_1")
 
 	// Assert functions fired
 	if atomic.LoadUint64(&errorFired) == 0 {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v4"
+	"strconv"
 	"time"
 )
 
@@ -69,7 +70,7 @@ func Listen(opts ListenOpts) (err error) {
 
 	// Reusable function for handling connection loss
 	listen := func(conn *pgx.Conn, ctx context.Context) (err error) {
-		_, err = conn.Exec(opts.Context, "listen "+opts.Channel)
+		_, err = conn.Exec(opts.Context, `listen `+strconv.Quote(opts.Channel))
 		if err != nil {
 			return
 		}
