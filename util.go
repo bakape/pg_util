@@ -13,15 +13,22 @@ func ensureCtx(c *context.Context) {
 	}
 }
 
+// Interface required to start a transaction or subtransation via savepoints
+type TxStarter interface {
+	Begin(context.Context) (pgx.Tx, error)
+}
+
 // InTransaction runs a function inside a transaction and handles commiting
 // and rollback on error.
 //
 // Can also be used for nested pseudotransactions via savepoints.
 //
 // ctx: Context to bind the query to. Defaults to context.Background().
+// conn: Anything, that can start a new transaction or subtransaction.
+// fn: Function to execute on the transaction.
 func InTransaction(
 	ctx context.Context,
-	conn pgx.Tx,
+	conn TxStarter,
 	fn func(pgx.Tx) error,
 ) (err error) {
 	ensureCtx(&ctx)

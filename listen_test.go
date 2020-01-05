@@ -2,9 +2,7 @@ package pg_util
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,37 +11,24 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
-type testConfig struct {
-	DBURL string `json:"db_url"`
-}
-
 func TestReconnect(t *testing.T) {
-	f, err := os.Open("test_config.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	var conf testConfig
-	err = json.NewDecoder(f).Decode(&conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	connOpts, err := pgx.ParseConfig(conf.DBURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	var (
-		wg                                        sync.WaitGroup
-		ctx, cancel                               = context.WithCancel(context.Background())
-		msgI                                      = 0
-		errorFired, connLossFired, reconnectFired uint64
+		dbURL                         = getURL(t)
+		wg                            sync.WaitGroup
+		ctx, cancel                   = context.WithCancel(context.Background())
+		msgI                          = 0
+		errorFired                    uint64
+		connLossFired, reconnectFired uint64
 	)
-	wg.Add(2)
 	defer cancel()
+	wg.Add(2)
+	connOpts, err := pgx.ParseConfig(dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = Listen(ListenOpts{
-		ConnectionURL: conf.DBURL,
+		ConnectionURL: dbURL,
 		Channel:       "test",
 		Context:       ctx,
 		OnError: func(_ error) {
