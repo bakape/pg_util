@@ -47,23 +47,32 @@ func TestInTransaction(t *testing.T) {
 	}
 	defer pool.Close()
 
+	tx, err := pool.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+
 	cases := [...]struct {
 		name    string
 		starter TxStarter
-		ctx     context.Context
 	}{
-		{"connection", conn, context.Background()},
-		{"pool", pool, context.Background()},
-		{"nil context", pool, nil},
+		{"connection", conn},
+		{"pool", pool},
+		{"transaction", tx},
 	}
 
 	for i := range cases {
 		c := cases[i]
 		t.Run(c.name, func(t *testing.T) {
-			err := InTransaction(c.ctx, c.starter, func(tx pgx.Tx) (err error) {
-				_, err = tx.Exec(context.Background(), "select 1")
-				return
-			})
+			err := InTransaction(
+				context.Background(),
+				c.starter,
+				func(tx pgx.Tx) (err error) {
+					_, err = tx.Exec(context.Background(), "select 1")
+					return
+				},
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
