@@ -9,12 +9,7 @@ import (
 )
 
 var (
-	insertCache sync.Map
-	argPool     = sync.Pool{
-		New: func() interface{} {
-			return []interface{}(nil)
-		},
-	}
+	insertCache  sync.Map
 	dedupMapPool = sync.Pool{
 		New: func() interface{} {
 			return make(map[string]struct{})
@@ -65,7 +60,6 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 		sql = _sql.(string)
 	}
 
-	args = argPool.Get().([]interface{})
 	var (
 		w          strings.Builder
 		scanStruct func(parentV reflect.Value, parentT reflect.Type)
@@ -165,12 +159,4 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 	}
 
 	return
-}
-
-// Put argument slice back into the pool for reuse. args must not be used after
-// this.
-func ResuseArgs(args []interface{}) {
-	if len(args) != 0 {
-		argPool.Put(args[:0])
-	}
 }

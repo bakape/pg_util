@@ -152,7 +152,6 @@ func TestTestBuildInsert(t *testing.T) {
 			}
 
 			q, args := BuildInsert(c.opts)
-			defer ResuseArgs(args)
 			if q != c.sql {
 				t.Fatalf("SQL mismatch: `%s` != `%s`", q, c.sql)
 			}
