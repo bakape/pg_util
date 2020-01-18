@@ -25,6 +25,12 @@ type InsertOpts struct {
 	// Struct that will have all its public fields written to the database.
 	//
 	// Use `db:"name"` to override the default name of a column.
+	//
+	// Tags with ",string" after the name will be converted to a string before
+	// being passed to the driver. This is useful in some cases like encoding to
+	// Postgres domains. This also works, if the name part of the tag is empty.
+	// Examples: `db:"name,string"` `db:",string"`  the ta `db:""`
+	//
 	// Fields with a `db:"-"` tag will be skipped
 	//
 	// First the fields in struct itself are scanned and then the fields in any
@@ -83,10 +89,15 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 		)
 		for i := 0; i < l; i++ {
 			var (
-				f    = parentT.Field(i)
-				name string
-				tag  = f.Tag.Get("db")
+				f               = parentT.Field(i)
+				name            string
+				tag             = f.Tag.Get("db")
+				convertToString bool
 			)
+			if i := strings.IndexByte(tag, ','); i != -1 {
+				convertToString = tag[i+1:] == "string"
+				tag = tag[:i]
+			}
 			switch tag {
 			case "-":
 				continue
@@ -116,7 +127,11 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 				w.WriteString(name)
 			}
 			dedupMap[name] = struct{}{}
-			args = append(args, v.Interface())
+			val := v.Interface()
+			if convertToString {
+				val = fmt.Sprint(val)
+			}
+			args = append(args, val)
 		}
 
 		for _, d := range embedded {

@@ -55,12 +55,24 @@ func TestTestBuildInsert(t *testing.T) {
 			},
 		},
 		{
-			name: "with name tag",
+			name: "with name tag and string tag",
 			opts: InsertOpts{
 				Table: "t1",
 				Data: struct {
 					F1 string `db:"field_1"`
-					F2 int
+					F2 int    `db:"field_2,string"`
+				}{"aaa", 1},
+			},
+			sql:  `insert into t1 (field_1,field_2) values ($1,$2)`,
+			args: []interface{}{"aaa", 1},
+		},
+		{
+			name: "with only string tag",
+			opts: InsertOpts{
+				Table: "t1",
+				Data: struct {
+					F1 string `db:"field_1"`
+					F2 int    `db:",string"`
 				}{"aaa", 1},
 			},
 			sql:  `insert into t1 (field_1,F2) values ($1,$2)`,
