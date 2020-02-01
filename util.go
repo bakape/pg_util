@@ -28,13 +28,22 @@ func InTransaction(
 	if err != nil {
 		return
 	}
+	panicked := true
+	defer func() {
+		if panicked {
+			tx.Rollback(ctx)
+		}
+	}()
 
 	err = fn(tx)
 	if err != nil {
-		tx.Rollback(ctx)
-		return
+		goto end
 	}
-	return tx.Commit(ctx)
+
+	err = tx.Commit(ctx)
+end:
+	panicked = false
+	return
 }
 
 // Execute all SQL statement strings and return on first error, if any.

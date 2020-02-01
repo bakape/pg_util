@@ -79,3 +79,38 @@ func TestInTransaction(t *testing.T) {
 		})
 	}
 }
+
+func TestInTransactionPanic(t *testing.T) {
+	t.Parallel()
+
+	u := getURL(t)
+	conn, err := pgx.Connect(context.Background(), u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(context.Background())
+
+	var _tx pgx.Tx
+	defer func() {
+		recover()
+		err = _tx.Rollback(context.Background())
+		if err != pgx.ErrTxClosed {
+			t.Fatalf("unexpected error: %s", err)
+		}
+	}()
+	err = InTransaction(
+		context.Background(),
+		conn,
+		func(tx pgx.Tx) (err error) {
+			_tx = tx
+			_, err = tx.Exec(context.Background(), "select 1")
+			if err != nil {
+				return
+			}
+			panic("foo")
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
