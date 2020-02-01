@@ -1,4 +1,6 @@
 language: go
+go:
+  - stable
 dist: bionic
 script: go test -v --race ./...
 services:
