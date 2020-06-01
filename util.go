@@ -49,7 +49,7 @@ end:
 // Execute all SQL statement strings and return on first error, if any.
 func ExecAll(ctx context.Context, tx pgx.Tx, q ...string) error {
 	for _, q := range q {
-		if _, err := tx.Exec(context.Background(), q); err != nil {
+		if _, err := tx.Exec(ctx, q); err != nil {
 			return err
 		}
 	}
