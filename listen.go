@@ -3,9 +3,10 @@ package pg_util
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v4"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v4"
 )
 
 // Options for calling Listen()

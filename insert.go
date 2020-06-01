@@ -29,7 +29,7 @@ type InsertOpts struct {
 	// Tags with ",string" after the name will be converted to a string before
 	// being passed to the driver. This is useful in some cases like encoding to
 	// Postgres domains. This also works, if the name part of the tag is empty.
-	// Examples: `db:"name,string"` `db:",string"`  the ta `db:""`
+	// Examples: `db:"name,string"` `db:",string"`
 	//
 	// Fields with a `db:"-"` tag will be skipped
 	//
