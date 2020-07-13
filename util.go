@@ -3,6 +3,7 @@ package pg_util
 import (
 	"context"
 
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 )
 
@@ -54,4 +55,12 @@ func ExecAll(ctx context.Context, tx pgx.Tx, q ...string) error {
 		}
 	}
 	return nil
+}
+
+// Try to extract an exception message, if err is *pgconn.PgError
+func ExtractException(err error) string {
+	if err, ok := err.(*pgconn.PgError); ok {
+		return err.Message
+	}
+	return ""
 }
