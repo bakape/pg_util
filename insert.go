@@ -70,6 +70,9 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 		w          strings.Builder
 		scanStruct func(parentV reflect.Value, parentT reflect.Type)
 		dedupMap   = dedupMapPool.Get().(map[string]struct{})
+
+		// TODO: pool this
+		valueConversions []string
 	)
 	defer func() {
 		for k := range dedupMap {
@@ -93,9 +96,17 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 				name            string
 				tag             = f.Tag.Get("db")
 				convertToString bool
+				valueConversion string
 			)
+			parts := strings.Split(tag, ",")
+			if len(parts) >= 2 {
+				tag = parts[0]
+				convertToString = parts[1] == "string"
+			}
+			if len(parts) >= 3 {
+				valueConversion = parts[2]
+			}
 			if i := strings.IndexByte(tag, ','); i != -1 {
-				convertToString = tag[i+1:] == "string"
 				tag = tag[:i]
 			}
 			switch tag {
@@ -132,6 +143,7 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 				val = fmt.Sprint(val)
 			}
 			args = append(args, val)
+			valueConversions = append(valueConversions, valueConversion)
 		}
 
 		for _, d := range embedded {
@@ -151,7 +163,7 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 
 	if !cached {
 		w.WriteString(") values (")
-		for i := 0; i < len(dedupMap); i++ {
+		for i := 0; i < len(args); i++ {
 			if i != 0 {
 				w.WriteByte(',')
 			}
@@ -160,6 +172,10 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 				w.WriteByte(byte(i) + '0' + 1) // Avoids allocation
 			} else {
 				w.Write(strconv.AppendUint(nil, uint64(i+1), 10))
+			}
+			if c := valueConversions[i]; c != "" {
+				w.WriteString("::")
+				w.WriteString(c)
 			}
 		}
 		w.WriteByte(')')
