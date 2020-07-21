@@ -93,7 +93,10 @@ func Listen(opts ListenOpts) (err error) {
 						"wating for message channel=%s error=%s",
 						opts.Channel, err,
 					)
-					reconnect <- struct{}{}
+					select {
+					case <-opts.Context.Done():
+					case reconnect <- struct{}{}:
+					}
 					return
 				}
 				select {
@@ -120,7 +123,10 @@ func Listen(opts ListenOpts) (err error) {
 						if !ok {
 							pending[msg] = struct{}{}
 							time.AfterFunc(opts.DebounceInterval, func() {
-								runPending <- msg
+								select {
+								case <-ctx.Done():
+								case runPending <- msg:
+								}
 							})
 						}
 					}
