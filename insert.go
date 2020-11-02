@@ -151,6 +151,7 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 
 	if !cached {
 		w.WriteString(") values (")
+		var tmp []byte
 		for i := 0; i < len(dedupMap); i++ {
 			if i != 0 {
 				w.WriteByte(',')
@@ -159,7 +160,8 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 			if i < 9 {
 				w.WriteByte(byte(i) + '0' + 1) // Avoids allocation
 			} else {
-				w.Write(strconv.AppendUint(nil, uint64(i+1), 10))
+				tmp = strconv.AppendUint(tmp[:0], uint64(i+1), 10)
+				w.Write(tmp)
 			}
 		}
 		w.WriteByte(')')
