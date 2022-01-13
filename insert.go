@@ -90,13 +90,15 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 		for i := 0; i < l; i++ {
 			var (
 				f               = parentT.Field(i)
+				split           = strings.Split(f.Tag.Get("db"), ",")
+				tag             = split[0]
 				name            string
-				tag             = f.Tag.Get("db")
 				convertToString bool
 			)
-			if i := strings.IndexByte(tag, ','); i != -1 {
-				convertToString = tag[i+1:] == "string"
-				tag = tag[:i]
+			for _, s := range split[1:] {
+				if s == "string" {
+					convertToString = true
+				}
 			}
 			switch tag {
 			case "-":
