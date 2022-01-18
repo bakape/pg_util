@@ -32,7 +32,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F2 int
 				}{"aaa", 1},
 			},
-			sql:  `insert into t1 (F1,F2) values ($1,$2)`,
+			sql:  `INSERT INTO "t1" ("F1","F2") VALUES ($1,$2)`,
 			args: []interface{}{"aaa", 1},
 			after: func() {
 				close(ch)
@@ -47,7 +47,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F2 int
 				}{"aaa", 1},
 			},
-			sql:  `insert into t1 (F1,F2) values ($1,$2)`,
+			sql:  `INSERT INTO "t1" ("F1","F2") VALUES ($1,$2)`,
 			args: []interface{}{"aaa", 1},
 			before: func() {
 				// Ensure this test always runs after "simple"
@@ -63,7 +63,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F2 int    `db:"field_2,string"`
 				}{"aaa", 1},
 			},
-			sql:  `insert into t1 (field_1,field_2) values ($1,$2)`,
+			sql:  `INSERT INTO "t1" ("field_1","field_2") VALUES ($1,$2)`,
 			args: []interface{}{"aaa", 1},
 		},
 		{
@@ -75,7 +75,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F2 int    `db:",string"`
 				}{"aaa", 1},
 			},
-			sql:  `insert into t1 (field_1,F2) values ($1,$2)`,
+			sql:  `INSERT INTO "t1" ("field_1","F2") VALUES ($1,$2)`,
 			args: []interface{}{"aaa", 1},
 		},
 		{
@@ -88,7 +88,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F3 int `db:"-"`
 				}{"aaa", 1, 1},
 			},
-			sql:  `insert into t1 (F1,F2) values ($1,$2)`,
+			sql:  `INSERT INTO "t1" ("F1","F2") VALUES ($1,$2)`,
 			args: []interface{}{"aaa", 1},
 		},
 		{
@@ -102,8 +102,7 @@ func TestTestBuildInsert(t *testing.T) {
 				Prefix: "with v as (select 1)",
 				Suffix: "returning f1",
 			},
-			sql: `with v as (select 1) insert into t1 (F1,F2) values ($1,$2)` +
-				` returning f1`,
+			sql:  `with v as (select 1) INSERT INTO "t1" ("F1","F2") VALUES ($1,$2) returning f1`,
 			args: []interface{}{"aaa", 1},
 		},
 		{
@@ -116,7 +115,7 @@ func TestTestBuildInsert(t *testing.T) {
 					inner
 				}{"aaa", 1, inner{3}},
 			},
-			sql:  `insert into t1 (F1,F2,F3) values ($1,$2,$3)`,
+			sql:  `INSERT INTO "t1" ("F1","F2","F3") VALUES ($1,$2,$3)`,
 			args: []interface{}{"aaa", 1, 3},
 		},
 		{
@@ -129,7 +128,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F2 int
 				}{innerOverlapping{3}, "aaa", 1},
 			},
-			sql:  `insert into t2 (F1,F2) values ($1,$2)`,
+			sql:  `INSERT INTO "t2" ("F1","F2") VALUES ($1,$2)`,
 			args: []interface{}{"aaa", 1},
 		},
 		{
@@ -149,8 +148,7 @@ func TestTestBuildInsert(t *testing.T) {
 					F10 int
 				}{"aaa", 1, 2, 3, 4, 5, 6, 7, 8, 9},
 			},
-			sql: `insert into t1 (F1,F2,F3,F4,F5,F6,F7,F8,F9,F10)` +
-				` values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+			sql:  `INSERT INTO "t1" ("F1","F2","F3","F4","F5","F6","F7","F8","F9","F10") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 			args: []interface{}{"aaa", 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 	}

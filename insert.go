@@ -126,7 +126,9 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 				if len(dedupMap) != 0 {
 					w.WriteByte(',')
 				}
+				w.WriteByte('"')
 				w.WriteString(name)
+				w.WriteByte('"')
 			}
 			dedupMap[name] = struct{}{}
 			val := v.Interface()
@@ -146,13 +148,13 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 			w.WriteString(o.Prefix)
 			w.WriteByte(' ')
 		}
-		fmt.Fprintf(&w, "insert into %s (", o.Table)
+		fmt.Fprintf(&w, `INSERT INTO "%s" (`, o.Table)
 	}
 
 	scanStruct(reflect.ValueOf(o.Data), rootT)
 
 	if !cached {
-		w.WriteString(") values (")
+		w.WriteString(") VALUES (")
 		var tmp []byte
 		for i := 0; i < len(dedupMap); i++ {
 			if i != 0 {
