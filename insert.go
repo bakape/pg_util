@@ -126,9 +126,16 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 				if len(dedupMap) != 0 {
 					w.WriteByte(',')
 				}
-				w.WriteByte('"')
+
+				// Do not quote names without specified tags to preserve case
+				// insensitivity
+				if tag != "" {
+					w.WriteByte('"')
+				}
 				w.WriteString(name)
-				w.WriteByte('"')
+				if tag != "" {
+					w.WriteByte('"')
+				}
 			}
 			dedupMap[name] = struct{}{}
 			val := v.Interface()
