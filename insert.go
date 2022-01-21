@@ -139,8 +139,14 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 			}
 			dedupMap[name] = struct{}{}
 			val := v.Interface()
-			if convertToString && val != nil {
-				val = fmt.Sprint(val)
+			if convertToString {
+				// Consistently convert the value type to not allow any external
+				// reflection to chose inconsistent branches
+				if v.Type().Kind() == reflect.Ptr && v.IsNil() {
+					val = (*string)(nil)
+				} else {
+					val = fmt.Sprint(val)
+				}
 			}
 			args = append(args, val)
 		}
