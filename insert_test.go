@@ -79,6 +79,18 @@ func TestTestBuildInsert(t *testing.T) {
 			args: []interface{}{"aaa", 1},
 		},
 		{
+			name: "string tag on nil value",
+			opts: InsertOpts{
+				Table: "t1",
+				Data: struct {
+					F1 string `db:"field_1"`
+					F2 *int   `db:",string"`
+				}{"aaa", nil},
+			},
+			sql:  `INSERT INTO "t1" ("field_1",F2) VALUES ($1,$2)`,
+			args: []interface{}{"aaa", nil},
+		},
+		{
 			name: "with skipped field",
 			opts: InsertOpts{
 				Table: "t1",
