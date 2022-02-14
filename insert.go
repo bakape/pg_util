@@ -142,8 +142,17 @@ func BuildInsert(o InsertOpts) (sql string, args []interface{}) {
 			if convertToString {
 				// Consistently convert the value type to not allow any external
 				// reflection to chose inconsistent branches
-				if v.Type().Kind() == reflect.Ptr && v.IsNil() {
-					val = (*string)(nil)
+				if v.Type().Kind() == reflect.Ptr {
+					if v.IsNil() {
+						val = (*string)(nil)
+					} else {
+						val = fmt.Sprint(
+							reflect.
+								ValueOf(val).
+								Elem().
+								Interface(),
+						)
+					}
 				} else {
 					val = fmt.Sprint(val)
 				}

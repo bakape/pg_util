@@ -1,6 +1,9 @@
 package pg_util
 
-import "testing"
+import (
+	"net"
+	"testing"
+)
 
 func TestTestBuildInsert(t *testing.T) {
 	t.Parallel()
@@ -21,6 +24,8 @@ func TestTestBuildInsert(t *testing.T) {
 	}
 
 	ch := make(chan struct{})
+
+	localhost := net.ParseIP("127.0.0.1")
 
 	cases := [...]testCase{
 		{
@@ -89,6 +94,18 @@ func TestTestBuildInsert(t *testing.T) {
 			},
 			sql:  `INSERT INTO "t1" ("field_1",F2) VALUES ($1,$2)`,
 			args: []interface{}{"aaa", nil},
+		},
+		{
+			name: "string tag on pointer",
+			opts: InsertOpts{
+				Table: "t1",
+				Data: struct {
+					F1 string  `db:"field_1"`
+					F2 *net.IP `db:",string"`
+				}{"aaa", &localhost},
+			},
+			sql:  `INSERT INTO "t1" ("field_1",F2) VALUES ($1,$2)`,
+			args: []interface{}{"aaa", "127.0.0.1"},
 		},
 		{
 			name: "with skipped field",
